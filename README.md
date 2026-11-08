@@ -12,7 +12,7 @@
 </p>
 
 **An AI receptionist on WhatsApp for psychologists.**
-It books, lists and cancels sessions, sends reminders and answers FAQs.
+It books, lists and cancels sessions, sends reminders and answers FAQs ASAP.
 When there is any sign of risk, or a topic outside its scope, it hands the conversation to the therapist.
 
 </div>
