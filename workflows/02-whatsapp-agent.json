@@ -1,0 +1,1317 @@
+{
+  "name": "PSI 02 - Atendimento WhatsApp (IA)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-psi",
+        "options": {}
+      },
+      "id": "75b67a69-0fff-4c0b-81cc-a30b02f24b49",
+      "name": "Webhook Evolution",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "98eeedf9-b828-4081-acee-5917c9279cea",
+              "name": "evolutionUrl",
+              "value": "http://evolution:8080",
+              "type": "string"
+            },
+            {
+              "id": "edee3387-8d13-40f2-b303-009bb010df33",
+              "name": "instancia",
+              "value": "consultorio",
+              "type": "string"
+            },
+            {
+              "id": "9b5c23b7-0cda-48d1-9c4b-c2f134bafdf7",
+              "name": "nomePsicologa",
+              "value": "Ana",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "457a22d4-c85f-4b99-857d-a28503c9555e",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $('Webhook Evolution').first().json.body || {};\nif (String(body.event || '').toLowerCase().replace('_', '.') !== 'messages.upsert') return [];\nconst d = Array.isArray(body.data) ? body.data[0] : (body.data || {});\nconst key = d.key || {};\nconst jid = String(key.remoteJid || '');\nif (!jid || jid.endsWith('@g.us') || jid.endsWith('@broadcast') || jid.endsWith('@newsletter')) return [];\n\nconst m = d.message || {};\nif (m.reactionMessage || m.protocolMessage || m.editedMessage) return [];\n\n// Contas com \"LID\": o número real pode vir em outro campo\nconst candidatos = [key.remoteJidAlt, key.senderPn, d.senderPn, jid].filter(Boolean).map(String);\nconst comNumero = candidatos.find(j => j.endsWith('@s.whatsapp.net'));\nconst telefone = (comNumero || jid).split('@')[0].split(':')[0];\nconst destino = comNumero ? telefone : jid;\n\n// Variante com/sem o 9º dígito (números brasileiros)\nlet telefoneAlt = telefone;\nif (/^55\\d{11}$/.test(telefone) && telefone[4] === '9') telefoneAlt = telefone.slice(0, 4) + telefone.slice(5);\nelse if (/^55\\d{10}$/.test(telefone)) telefoneAlt = telefone.slice(0, 4) + '9' + telefone.slice(4);\n\nconst texto = String(\n  m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption ||\n  m.documentMessage?.caption || m.buttonsResponseMessage?.selectedDisplayText || m.listResponseMessage?.title || ''\n).trim();\nlet tipo = 'texto';\nif (!texto) {\n  if (m.audioMessage) tipo = 'audio';\n  else if (m.imageMessage || m.stickerMessage) tipo = 'imagem';\n  else if (m.documentMessage || m.documentWithCaptionMessage) tipo = 'documento';\n  else tipo = 'outro';\n}\nreturn [{ json: {\n  telefone, telefoneAlt, destino, jid,\n  nome: d.pushName || '',\n  texto, tipo,\n  fromMe: !!key.fromMe,\n  dono: String(body.sender || ''),\n} }];"
+      },
+      "id": "170f126f-a6ae-455d-b541-9ec2d54a3d5f",
+      "name": "Normalizar mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d4126b1e-c4e3-43b0-aeaf-93029d432442",
+              "leftValue": "={{ $json.fromMe }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "fe039ef4-3045-4102-a4f2-363b7c54adab",
+      "name": "Mensagem enviada por mim?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $input.first().json;\nconst r = String(msg.texto || '').match(/^#(pausar|voltar)\\s+([+\\d\\s().-]{8,})/i);\nif (!r) return []; // não é comando: ignora (é a própria psicóloga conversando)\nlet alvo = r[2].replace(/\\D/g, '');\nif (alvo.length === 10 || alvo.length === 11) alvo = '55' + alvo;\nlet alvoAlt = alvo;\nif (/^55\\d{11}$/.test(alvo) && alvo[4] === '9') alvoAlt = alvo.slice(0, 4) + alvo.slice(5);\nelse if (/^55\\d{10}$/.test(alvo)) alvoAlt = alvo.slice(0, 4) + '9' + alvo.slice(4);\nconst cmd = r[1].toLowerCase();\nconst dono = (msg.dono || msg.jid).split('@')[0].split(':')[0];\nconst resposta = cmd === 'pausar'\n  ? `⏸️ Assistente pausado para ${alvo} por 30 dias. Para reativar: #voltar ${alvo}`\n  : `▶️ Assistente reativado para ${alvo}.`;\nreturn [{ json: { cmd, alvo, alvoAlt, dono, resposta } }];"
+      },
+      "id": "915139bd-c93d-4a90-bae3-7c490dca2450",
+      "name": "Ler comando",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8b74d67a-5e9d-433e-bf16-adb3f81c01ee",
+              "leftValue": "={{ $json.cmd }}",
+              "rightValue": "pausar",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "6ba187e2-f40e-4178-999b-6a7f66f113f1",
+      "name": "Pausar ou voltar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_pausa (telefone, ate, motivo) VALUES ($1, now() + interval '30 days', 'pausado pela psicóloga'), ($2, now() + interval '30 days', 'pausado pela psicóloga') ON CONFLICT (telefone) DO UPDATE SET ate = EXCLUDED.ate, motivo = EXCLUDED.motivo;",
+        "options": {
+          "queryReplacement": "={{ [ $json.alvo, $json.alvoAlt ] }}"
+        }
+      },
+      "id": "41e949e7-b2a1-437e-90c8-81631c2786e6",
+      "name": "Pausar contato",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1328,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "PgAutomacao00001",
+          "name": "Postgres Automação"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM bot_pausa WHERE telefone IN ($1, $2);",
+        "options": {
+          "queryReplacement": "={{ [ $json.alvo, $json.alvoAlt ] }}"
+        }
+      },
+      "id": "3d3d4e2d-14dc-4103-acc6-d6df9b032faa",
+      "name": "Reativar contato",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1328,
+        160
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "PgAutomacao00001",
+          "name": "Postgres Automação"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.evolutionUrl }}/message/sendText/{{ $('Config').first().json.instancia }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $('Ler comando').first().json.dono, text: $('Ler comando').first().json.resposta }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "b6490566-04e2-4c0b-bca1-948081618dc3",
+      "name": "Confirmar comando",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1552,
+        80
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "EvolutionApi0001",
+          "name": "Evolution API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT EXISTS (SELECT 1 FROM bot_pausa WHERE telefone IN ($1, $2) AND ate > now()) AS pausado;",
+        "options": {
+          "queryReplacement": "={{ [ $json.telefone, $json.telefoneAlt ] }}"
+        }
+      },
+      "id": "87c1544c-67cb-4762-882d-3daa983d4670",
+      "name": "Robô pausado p/ contato?",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        880,
+        432
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "PgAutomacao00001",
+          "name": "Postgres Automação"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e86efdf9-8648-4432-822e-c1c1c2cbf954",
+              "leftValue": "={{ $json.pausado }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "f079696c-5653-4af2-aa25-0e2b320b1a1a",
+      "name": "Pausado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "afdfb909-1ccd-4088-b530-4b482b452a13",
+              "leftValue": "={{ $('Normalizar mensagem').first().json.tipo }}",
+              "rightValue": "texto",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "3101a62b-e9e4-4906-bedd-5c7245cca93d",
+      "name": "É texto?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1328,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.evolutionUrl }}/message/sendText/{{ $('Config').first().json.instancia }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $('Normalizar mensagem').first().json.destino, delay: Math.floor(20000 + Math.random() * 10000), text: 'Oi! Por aqui eu consigo ler apenas mensagens escritas 🙂 Pode me mandar por texto, por favor? Se preferir falar diretamente com a ' + $('Config').first().json.nomePsicologa + ', é só escrever *falar com a psicóloga*.' }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "9453561c-9cb0-4a4a-b843-cd493c26e3cb",
+      "name": "Pedir mensagem escrita",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1552,
+        624
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "EvolutionApi0001",
+          "name": "Evolution API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Normalizar mensagem').first().json.texto }}",
+        "options": {
+          "systemMessage": "=Você é a assistente virtual do consultório de psicologia de Ana (exemplo), psicóloga (CRP 00/000000). Você conversa pelo WhatsApp com pacientes e pessoas interessadas em atendimento.\n\nAgora: {{ $now.setZone('America/Sao_Paulo').setLocale('pt-BR').toFormat(\"cccc, dd/LL/yyyy HH:mm\") }} (horário de Brasília).\nNome no WhatsApp deste contato: {{ $('Normalizar mensagem').first().json.nome || 'não informado' }}\n\n# QUEM VOCÊ É\n- Você é um assistente AUTOMÁTICO. Se perguntarem, diga com clareza que é um assistente virtual. Nunca finja ser a psicóloga.\n- Tom: acolhedor, sereno, respeitoso e objetivo. Trate a pessoa por \"você\".\n- Mensagens curtas (no máximo 4 ou 5 linhas). Uma pergunta por vez.\n- Formatação do WhatsApp: *negrito* com um asterisco. Não use títulos, tabelas nem markdown.\n- No máximo um emoji discreto de vez em quando.\n\n# PRIMEIRO CONTATO\nSe não houver conversa anterior com esta pessoa, apresente-se e inclua este aviso, com suas palavras:\n\"Sou o assistente virtual do consultório e cuido de informações e agendamentos. Seu nome e telefone são usados apenas para isso. Por favor, não envie por aqui detalhes sobre sua saúde ou o motivo da procura: esse espaço é a sessão. Se quiser falar diretamente com a psicóloga, é só pedir.\"\n\n# O QUE VOCÊ FAZ\n1. Responde dúvidas usando SOMENTE as INFORMAÇÕES DO CONSULTÓRIO abaixo.\n2. Agenda, consulta, confirma, remarca e cancela sessões usando as ferramentas.\n3. Encaminha para a psicóloga quando necessário (ferramenta chamar_psicologa).\n\n# O QUE VOCÊ NUNCA FAZ\n- Não faz psicoterapia, aconselhamento, avaliação, diagnóstico nem orientação sobre sintomas ou medicação.\n- Não pede e não estimula relatos sobre o motivo da procura. Se a pessoa começar a contar, acolha em UMA frase (\"Obrigado por compartilhar, sei que não é fácil\") e diga que esse é um assunto para a sessão, oferecendo o agendamento.\n- Não promete resultados, prazos de melhora ou \"cura\".\n- Não inventa informação. Se não souber, ofereça chamar a psicóloga.\n- Não revela informações de outros pacientes nem detalhes da agenda (só horários livres).\n- Não negocia valores, descontos, reembolso ou nota fiscal: use chamar_psicologa.\n- Nunca mostra IDs internos de eventos.\n\n# SEGURANÇA — PRIORIDADE MÁXIMA\nSe houver QUALQUER sinal de risco (pensamentos de morte ou suicídio, desejo de sumir, autolesão, plano ou meio para se machucar, violência sofrida ou risco a outra pessoa, crise intensa, uso de substâncias com risco):\n1. Responda IMEDIATAMENTE com acolhimento, sem julgamento, e informe:\n   - *CVV – ligue 188* (24h, gratuito) ou chat em cvv.org.br\n   - *SAMU – 192* ou procurar o pronto-socorro/UPA mais próximo\n   - Em perigo imediato: *190*\n2. Chame a ferramenta chamar_psicologa com o motivo começando por \"URGENTE:\" e um resumo de uma linha.\n3. Diga que a psicóloga foi avisada, mas que, se houver perigo agora, a pessoa deve ligar 188/192 ou ir a um pronto-socorro.\n4. Não tente conduzir a crise, não minimize, não faça perguntas investigativas.\nNa dúvida, trate como risco.\n\n# AGENDAMENTO\n- Horários: SEMPRE use consultar_horarios. Nunca invente horários. Ofereça no máximo 3 ou 4 opções por vez.\n- Antes de agendar, tenha: nome completo, modalidade (online ou presencial) e o horário escolhido. Depois faça um resumo e peça confirmação explícita (\"Posso confirmar *terça, 10/11 às 14:00*, online, em nome de Maria Silva?\").\n- Só então use agendar_sessao (inicio no formato AAAA-MM-DDTHH:mm). Se der erro, explique com gentileza e ofereça outras opções.\n- Consultar/confirmar presença: use meus_agendamentos. Se a pessoa responder \"confirmo\" a um lembrete, verifique a sessão e agradeça a confirmação.\n- Cancelar: use meus_agendamentos, confirme qual sessão e então cancelar_sessao. Lembre a política de cancelamento.\n- Remarcar: primeiro consulte os horários livres e combine o novo horário; depois cancele a sessão antiga (cancelar_sessao) e só então agende a nova (agendar_sessao). Se o cancelamento for recusado pela política, chame a psicóloga.\n- Primeira consulta: explique brevemente como funciona (ver informações) antes de oferecer horários.\n\n# QUANDO CHAMAR A PSICÓLOGA (chamar_psicologa)\n- A pessoa pede para falar com ela; dúvidas clínicas ou sobre o tratamento; valores especiais, reembolso, nota fiscal, convênio; reclamações; cancelamento fora do prazo; qualquer situação não coberta aqui; risco (ver SEGURANÇA).\n- Depois de chamar, avise que ela responderá pessoalmente assim que possível (não prometa horário) e encerre com cordialidade.\n\n# INFORMAÇÕES DO CONSULTÓRIO\n- Psicóloga: Ana (exemplo), CRP 00/000000\n- Abordagem: Terapia Cognitivo-Comportamental\n- Público: adultos e adolescentes a partir de 14 anos\n- Modalidades: online por Google Meet e presencial na Rua Exemplo, 123, sala 4 – São Paulo/SP\n- Sessão: 50 minutos, normalmente semanal\n- Valor: R$ 150 por sessão | Pagamento: Pix ou cartão, até o dia da sessão\n- Convênios: não atende convênio; emite recibo para reembolso\n- Política de cancelamento: avisar com 24h de antecedência; faltas sem aviso são cobradas\n- Primeira sessão: conversa inicial para entender o que a pessoa busca e combinar como será o acompanhamento\n- Horário de atendimento do consultório: segunda a sexta, das 8h às 19h",
+          "maxIterations": 10
+        }
+      },
+      "id": "770789c4-5822-497a-8d1b-5339d704a542",
+      "name": "Assistente Virtual",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1600,
+        432
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash-lite",
+        "options": {
+          "maxOutputTokens": 1024,
+          "temperature": 0.3
+        }
+      },
+      "id": "901f01c2-78b3-49df-bfa4-4f2e81e4d2fd",
+      "name": "Gemini",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        704
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "GoogleGemini0001",
+          "name": "Google Gemini"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Normalizar mensagem').first().json.telefone }}",
+        "contextWindowLength": 20
+      },
+      "id": "deb315e4-b9fa-4ddf-9d94-7bc857a4a026",
+      "name": "Memória da conversa",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        1504,
+        704
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "PgAutomacao00001",
+          "name": "Postgres Automação"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Consulta os horários LIVRES da agenda da psicóloga. Use SEMPRE antes de oferecer ou agendar um horário. Pode receber uma data inicial opcional.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "PsiFerramentas01"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "acao": "horarios",
+            "telefone": "={{ $('Normalizar mensagem').first().json.telefone }}",
+            "nome": "={{ $('Normalizar mensagem').first().json.nome }}",
+            "data": "={{ $fromAI('data', 'Data a partir da qual buscar, no formato AAAA-MM-DD. Deixe vazio para os próximos dias.', 'string', '') }}",
+            "inicio": "",
+            "modalidade": "",
+            "eventId": "",
+            "motivo": ""
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "acao",
+              "displayName": "acao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "telefone",
+              "displayName": "telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "data",
+              "displayName": "data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "inicio",
+              "displayName": "inicio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "modalidade",
+              "displayName": "modalidade",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "eventId",
+              "displayName": "eventId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "919b725c-1dfa-4449-922b-fbe8abfbc882",
+      "name": "consultar_horarios",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1664,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Agenda uma sessão. Use SOMENTE depois de a pessoa escolher um horário retornado por consultar_horarios e confirmar explicitamente nome completo, data/hora e modalidade.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "PsiFerramentas01"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "acao": "agendar",
+            "telefone": "={{ $('Normalizar mensagem').first().json.telefone }}",
+            "nome": "={{ $fromAI('nome', 'Nome completo do paciente', 'string') }}",
+            "data": "",
+            "inicio": "={{ $fromAI('inicio', 'Data e hora de início da sessão no formato AAAA-MM-DDTHH:mm, horário de Brasília', 'string') }}",
+            "modalidade": "={{ $fromAI('modalidade', 'online ou presencial', 'string') }}",
+            "eventId": "",
+            "motivo": ""
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "acao",
+              "displayName": "acao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "telefone",
+              "displayName": "telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "data",
+              "displayName": "data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "inicio",
+              "displayName": "inicio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "modalidade",
+              "displayName": "modalidade",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "eventId",
+              "displayName": "eventId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "429f49bd-d141-4400-83d9-4bea2593685e",
+      "name": "agendar_sessao",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1808,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Lista as próximas sessões agendadas DESTE contato, com o ID interno de cada uma. Use para confirmar presença, cancelar ou remarcar.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "PsiFerramentas01"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "acao": "listar",
+            "telefone": "={{ $('Normalizar mensagem').first().json.telefone }}",
+            "nome": "={{ $('Normalizar mensagem').first().json.nome }}",
+            "data": "",
+            "inicio": "",
+            "modalidade": "",
+            "eventId": "",
+            "motivo": ""
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "acao",
+              "displayName": "acao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "telefone",
+              "displayName": "telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "data",
+              "displayName": "data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "inicio",
+              "displayName": "inicio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "modalidade",
+              "displayName": "modalidade",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "eventId",
+              "displayName": "eventId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "669fb8b4-5be3-44ef-ab5e-d7b327951844",
+      "name": "meus_agendamentos",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1952,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Cancela uma sessão deste contato. Use o ID retornado por meus_agendamentos, somente depois de a pessoa confirmar qual sessão quer cancelar.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "PsiFerramentas01"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "acao": "cancelar",
+            "telefone": "={{ $('Normalizar mensagem').first().json.telefone }}",
+            "nome": "={{ $('Normalizar mensagem').first().json.nome }}",
+            "data": "",
+            "inicio": "",
+            "modalidade": "",
+            "eventId": "={{ $fromAI('eventId', 'ID interno da sessão, obtido em meus_agendamentos', 'string') }}",
+            "motivo": ""
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "acao",
+              "displayName": "acao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "telefone",
+              "displayName": "telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "data",
+              "displayName": "data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "inicio",
+              "displayName": "inicio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "modalidade",
+              "displayName": "modalidade",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "eventId",
+              "displayName": "eventId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "1d7ac37b-62a8-4589-bb0e-b55a352e3c37",
+      "name": "cancelar_sessao",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        2080,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Avisa a psicóloga para assumir a conversa pessoalmente e pausa o assistente para este contato. Use em risco/crise (motivo começando com URGENTE:), pedidos para falar com ela, dúvidas clínicas, valores/reembolso ou casos não cobertos.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "PsiFerramentas01"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "acao": "transferir",
+            "telefone": "={{ $('Normalizar mensagem').first().json.telefone }}",
+            "nome": "={{ $('Normalizar mensagem').first().json.nome }}",
+            "data": "",
+            "inicio": "",
+            "modalidade": "",
+            "eventId": "",
+            "motivo": "={{ $fromAI('motivo', 'Motivo em uma linha. Comece com URGENTE: se houver qualquer sinal de risco.', 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "acao",
+              "displayName": "acao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "telefone",
+              "displayName": "telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "data",
+              "displayName": "data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "inicio",
+              "displayName": "inicio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "modalidade",
+              "displayName": "modalidade",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "eventId",
+              "displayName": "eventId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "4fbb5901-5fa8-4b4f-8742-5a263aa5abad",
+      "name": "chamar_psicologa",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        2224,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.evolutionUrl }}/message/sendText/{{ $('Config').first().json.instancia }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $('Normalizar mensagem').first().json.destino, delay: Math.floor(20000 + Math.random() * 10000), text: $json.output || 'Desculpe, tive um problema técnico agora. Pode tentar de novo em alguns minutos? Se for urgente, ligue para o CVV no 188 ou para o SAMU no 192.' }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "8c066140-9430-4510-9e9a-6be46ee08584",
+      "name": "Enviar resposta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1968,
+        432
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "EvolutionApi0001",
+          "name": "Evolution API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.first().json;\nif (r.output) return [];\n// no máximo 1 alerta de IA a cada 30 min (evita enxurrada quando a cota do Gemini acaba)\nconst st = $getWorkflowStaticData('global');\nconst agora = Date.now();\nif (st.ultimoAlertaIA && agora - st.ultimoAlertaIA < 30 * 60 * 1000) return [];\nst.ultimoAlertaIA = agora;\nconst e = r.error;\nconst msg = String((e && (e.message || e.description)) || (typeof e === 'string' ? e : 'sem detalhe')).slice(0, 400);\nreturn [{ json: { texto: '⚠️ *Robô da Ana — a IA falhou*\\n\\nO paciente recebeu a mensagem de \"problema técnico\".\\n\\nErro: ' + msg + '\\n\\n(Próximo alerta deste tipo só daqui a 30 min.)' } }];"
+      },
+      "id": "d243cf13-b823-4357-95a8-c4aec7f5e23d",
+      "name": "Falha da IA?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1968,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.evolutionUrl }}/message/sendText/{{ $('Config').first().json.instancia }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: '5511999990000', text: $json.texto }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "3a43b79f-f7a1-4059-a984-39e1338e339f",
+      "name": "Alertar técnico",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2192,
+        608
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "EvolutionApi0001",
+          "name": "Evolution API"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Mensagem enviada por mim?": {
+      "main": [
+        [
+          {
+            "node": "Ler comando",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Robô pausado p/ contato?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler comando": {
+      "main": [
+        [
+          {
+            "node": "Pausar ou voltar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pausar ou voltar?": {
+      "main": [
+        [
+          {
+            "node": "Pausar contato",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reativar contato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pausar contato": {
+      "main": [
+        [
+          {
+            "node": "Confirmar comando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reativar contato": {
+      "main": [
+        [
+          {
+            "node": "Confirmar comando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Robô pausado p/ contato?": {
+      "main": [
+        [
+          {
+            "node": "Pausado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pausado?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "É texto?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É texto?": {
+      "main": [
+        [
+          {
+            "node": "Assistente Virtual",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pedir mensagem escrita",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Assistente Virtual",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memória da conversa": {
+      "ai_memory": [
+        [
+          {
+            "node": "Assistente Virtual",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "consultar_horarios": {
+      "ai_tool": [
+        [
+          {
+            "node": "Assistente Virtual",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "agendar_sessao": {
+      "ai_tool": [
+        [
+          {
+            "node": "Assistente Virtual",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "meus_agendamentos": {
+      "ai_tool": [
+        [
+          {
+            "node": "Assistente Virtual",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "cancelar_sessao": {
+      "ai_tool": [
+        [
+          {
+            "node": "Assistente Virtual",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "chamar_psicologa": {
+      "ai_tool": [
+        [
+          {
+            "node": "Assistente Virtual",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assistente Virtual": {
+      "main": [
+        [
+          {
+            "node": "Enviar resposta",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Falha da IA?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Falha da IA?": {
+      "main": [
+        [
+          {
+            "node": "Alertar técnico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Evolution": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Normalizar mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar mensagem": {
+      "main": [
+        [
+          {
+            "node": "Mensagem enviada por mim?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "PsiAlertasErro04"
+  },
+  "nodeGroups": [],
+  "id": "PsiAtendimento02",
+  "tags": [],
+  "pinData": {}
+}

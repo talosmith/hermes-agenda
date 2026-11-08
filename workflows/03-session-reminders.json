@@ -1,0 +1,333 @@
+{
+  "name": "PSI 03 - Lembretes de Sessão",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "ba80f597-24ec-43f1-ad44-77815e1a086a",
+      "name": "A cada 15 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// =====================================================================\n//  CONFIGURE AQUI\n// =====================================================================\nconst cfg = {\n  calendarId: 'agenda@example.com', // mesmo e-mail do fluxo 01\n  fuso: 'America/Sao_Paulo',\n  evolutionUrl: 'http://evolution:8080',\n  instancia: 'consultorio',\n  nomePsicologa: 'Ana',\n  enviar24h: true,\n  enviar2h: true,\n  linkOnline: '',            // link fixo da sala online (ex.: Google Meet). Vazio = \"a psicóloga envia o link\"\n  endereco: 'Rua Exemplo, 123, sala 4 – São Paulo/SP',\n  silencioInicio: 21,        // não envia lembretes entre 21h...\n  silencioFim: 8,            // ...e 8h\n};\nconst agora = DateTime.now().setZone(cfg.fuso);\nif (agora.hour >= cfg.silencioInicio || agora.hour < cfg.silencioFim) return [];\nreturn [{ json: { ...cfg, timeMin: agora.toISO(), timeMax: agora.plus({ hours: 25 }).toISO() } }];"
+      },
+      "id": "7c68ea5e-615a-4b52-a329-cf50665aedd2",
+      "name": "Config lembretes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config lembretes').first().json.calendarId }}"
+        },
+        "returnAll": true,
+        "timeMin": "={{ $json.timeMin }}",
+        "timeMax": "={{ $json.timeMax }}",
+        "options": {
+          "orderBy": "startTime"
+        }
+      },
+      "id": "4052db60-3a18-4019-afbd-2e52f93658b4",
+      "name": "Sessões das próximas 25h",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        448,
+        208
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "GoogleAgenda0001",
+          "name": "Google Agenda"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Config lembretes').first().json;\nconst tz = cfg.fuso;\nconst agora = DateTime.now().setZone(tz);\nconst saida = [];\nfor (const item of $input.all()) {\n  const ev = item.json;\n  if (!ev || !ev.id || !ev.start || !ev.start.dateTime || ev.status === 'cancelled') continue;\n  const desc = String(ev.description || '').replace(/<br\\s*\\/?>/gi, '\\n').replace(/<[^>]+>/g, ' ');\n  const mTel = desc.match(/WhatsApp:\\s*\\+?([\\d\\s().-]{10,20})/i);\n  if (!mTel) continue; // só eventos com \"WhatsApp: número\" na descrição recebem lembrete\n  let telefone = mTel[1].replace(/\\D/g, '');\n  if (telefone.length === 10 || telefone.length === 11) telefone = '55' + telefone;\n  const nome = ((desc.match(/Paciente:\\s*([^\\n]+)/i) || [])[1] || '').trim();\n  const primeiroNome = nome.split(/\\s+/)[0] || '';\n  const modalidade = ((desc.match(/Modalidade:\\s*([^\\n]+)/i) || [])[1] || '').trim().toLowerCase();\n\n  const inicio = DateTime.fromISO(ev.start.dateTime).setZone(tz).setLocale('pt-BR');\n  const horas = inicio.diff(agora, 'hours').hours;\n  const criadoHa = ev.created ? inicio.diff(DateTime.fromISO(ev.created), 'hours').hours : 999;\n  const quando = inicio.hasSame(agora, 'day') ? 'hoje'\n    : inicio.hasSame(agora.plus({ days: 1 }), 'day') ? 'amanhã' : inicio.toFormat('cccc');\n  const hora = inicio.toFormat('HH:mm');\n  const ola = primeiroNome ? `Olá, ${primeiroNome}!` : 'Olá!';\n  const local = modalidade.includes('online')\n    ? (cfg.linkOnline ? `Link da sessão: ${cfg.linkOnline}` : 'A sessão será online.')\n    : modalidade.includes('presencial') ? `Endereço: ${cfg.endereco}` : '';\n\n  if (cfg.enviar24h && horas > 3 && horas <= 24 && criadoHa >= 26) {\n    saida.push({ json: {\n      eventId: ev.id, tipo: '24h', inicio: ev.start.dateTime, telefone,\n      mensagem: `${ola} 😊 Passando para lembrar da sua sessão com ${cfg.nomePsicologa} *${quando}, ${inicio.toFormat('dd/LL')}, às ${hora}*.` +\n        (local ? `\\n${local}` : '') +\n        `\\n\\nVocê pode confirmar sua presença respondendo *CONFIRMO*? Se precisar remarcar, é só me avisar por aqui.`,\n    } });\n  }\n  if (cfg.enviar2h && horas > 0 && horas <= 2) {\n    saida.push({ json: {\n      eventId: ev.id, tipo: '2h', inicio: ev.start.dateTime, telefone,\n      mensagem: `${ola} Sua sessão com ${cfg.nomePsicologa} começa às *${hora}*.` + (local ? `\\n${local}` : '') + '\\n\\nAté já!',\n    } });\n  }\n}\nreturn saida;"
+      },
+      "id": "92829e52-8cc5-4c30-8d08-bedb3fbe8bad",
+      "name": "Montar lembretes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO lembretes_enviados (event_id, tipo, inicio, telefone, mensagem) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (event_id, tipo, inicio) DO NOTHING RETURNING telefone, mensagem;",
+        "options": {
+          "queryReplacement": "={{ [ $json.eventId, $json.tipo, $json.inicio, $json.telefone, $json.mensagem ] }}"
+        }
+      },
+      "id": "474aa949-0f2c-4b1e-820e-bdb4224ab743",
+      "name": "Registrar (evita duplicado)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        880,
+        208
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "PgAutomacao00001",
+          "name": "Postgres Automação"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6127fc33-f504-48ae-88a6-84daee9ec67c",
+              "leftValue": "={{ $json.telefone }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "19d3e5ef-f2d4-4c19-8e32-c96a75fa5d0a",
+      "name": "Ainda não enviado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config lembretes').first().json.evolutionUrl }}/message/sendText/{{ $('Config lembretes').first().json.instancia }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.telefone, delay: 1500, text: $json.mensagem }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "19ae7fcc-dfb8-4fef-b12f-e584a7c26132",
+      "name": "Enviar lembrete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1328,
+        192
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "EvolutionApi0001",
+          "name": "Evolution API"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO n8n_chat_histories (session_id, message) VALUES ($1, jsonb_build_object('type', 'ai', 'content', $2::text, 'additional_kwargs', '{}'::jsonb, 'response_metadata', '{}'::jsonb));",
+        "options": {
+          "queryReplacement": "={{ [ $('Ainda não enviado?').item.json.telefone, $('Ainda não enviado?').item.json.mensagem ] }}"
+        }
+      },
+      "id": "d3ee6cca-74de-4467-8391-da3010dbb0cc",
+      "name": "Salvar na memória da IA",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1552,
+        192
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "PgAutomacao00001",
+          "name": "Postgres Automação"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 3
+            }
+          ]
+        }
+      },
+      "id": "f5a61b20-530b-4529-8e7d-b75b0d941eed",
+      "name": "Todo dia às 3h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM n8n_chat_histories WHERE criado_em < now() - interval '90 days'; DELETE FROM lembretes_enviados WHERE enviado_em < now() - interval '90 days'; DELETE FROM bot_pausa WHERE ate < now();",
+        "options": {}
+      },
+      "id": "7451363f-7216-4aaa-aec7-f1f8199ec90c",
+      "name": "Apagar dados antigos",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        224,
+        480
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "PgAutomacao00001",
+          "name": "Postgres Automação"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "A cada 15 minutos": {
+      "main": [
+        [
+          {
+            "node": "Config lembretes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config lembretes": {
+      "main": [
+        [
+          {
+            "node": "Sessões das próximas 25h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sessões das próximas 25h": {
+      "main": [
+        [
+          {
+            "node": "Montar lembretes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar lembretes": {
+      "main": [
+        [
+          {
+            "node": "Registrar (evita duplicado)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar (evita duplicado)": {
+      "main": [
+        [
+          {
+            "node": "Ainda não enviado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ainda não enviado?": {
+      "main": [
+        [
+          {
+            "node": "Enviar lembrete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar lembrete": {
+      "main": [
+        [
+          {
+            "node": "Salvar na memória da IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Todo dia às 3h": {
+      "main": [
+        [
+          {
+            "node": "Apagar dados antigos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "PsiAlertasErro04"
+  },
+  "nodeGroups": [],
+  "id": "PsiLembretes0003",
+  "tags": [],
+  "pinData": {}
+}

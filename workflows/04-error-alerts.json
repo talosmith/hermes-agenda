@@ -1,0 +1,91 @@
+{
+  "name": "PSI 04 - Alerta de Erro",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e81832ce-592f-4ff1-9ed9-5f37b5baa0fa",
+      "name": "Quando um fluxo falhar",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst wfNome = (d.workflow && d.workflow.name) || '?';\nconst ex = d.execution || {};\nconst err = ex.error || (d.trigger && d.trigger.error) || {};\nconst no = ex.lastNodeExecuted || (err.node && err.node.name) || '?';\nconst msg = String(err.message || err.description || 'sem detalhe').slice(0, 400);\n// no máximo 1 alerta do mesmo erro a cada 30 min\nconst st = $getWorkflowStaticData('global');\nconst chave = wfNome + '|' + no + '|' + msg.slice(0, 80);\nconst agora = Date.now();\nst.vistos = Object.fromEntries(Object.entries(st.vistos || {}).filter(([, t]) => agora - t < 30 * 60 * 1000));\nif (st.vistos[chave]) return [];\nst.vistos[chave] = agora;\nconst hora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\nreturn [{ json: { texto: '🚨 *Robô da Ana — erro*\\n\\nFluxo: ' + wfNome + '\\nEtapa: ' + no + '\\nQuando: ' + hora + '\\n\\nErro: ' + msg + (ex.id ? '\\n\\nExecução nº ' + ex.id + ' (veja em Executions no n8n)' : '') } }];"
+      },
+      "id": "f5b2c1f3-e524-4a21-b23c-9a7976c9a8da",
+      "name": "Montar alerta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://evolution:8080/message/sendText/consultorio",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: '5511999990000', text: $json.texto }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "1e948c4f-7687-4ad4-9da3-5723edf53b50",
+      "name": "Enviar alerta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        304
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "EvolutionApi0001",
+          "name": "Evolution API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Quando um fluxo falhar": {
+      "main": [
+        [
+          {
+            "node": "Montar alerta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar alerta": {
+      "main": [
+        [
+          {
+            "node": "Enviar alerta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "America/Sao_Paulo"
+  },
+  "nodeGroups": [],
+  "id": "PsiAlertasErro04",
+  "tags": [],
+  "pinData": {}
+}

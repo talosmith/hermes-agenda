@@ -1,0 +1,1058 @@
+{
+  "name": "PSI 01 - Ferramentas da Agenda",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "acao"
+            },
+            {
+              "name": "telefone"
+            },
+            {
+              "name": "nome"
+            },
+            {
+              "name": "data"
+            },
+            {
+              "name": "inicio"
+            },
+            {
+              "name": "modalidade"
+            },
+            {
+              "name": "eventId"
+            },
+            {
+              "name": "motivo"
+            }
+          ]
+        }
+      },
+      "id": "945a4cf3-a6f6-4844-9cbb-4f7a5ce71214",
+      "name": "Quando chamado pelo agente",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// =====================================================================\n//  CONFIGURE AQUI A AGENDA DA PSICÓLOGA\n// =====================================================================\nconst config = {\n  calendarId: 'agenda@example.com', // e-mail/ID da agenda do Google. 'primary' NÃO funciona no n8n\n  fuso: 'America/Sao_Paulo',\n  duracaoMin: 50,                   // duração da sessão em minutos\n  // Horários de INÍCIO das sessões por dia da semana (1=segunda ... 7=domingo)\n  grade: {\n    1: ['08:00', '09:00', '10:00', '14:00', '15:00', '16:00', '17:00', '18:00'],\n    2: ['08:00', '09:00', '10:00', '14:00', '15:00', '16:00', '17:00', '18:00'],\n    3: ['08:00', '09:00', '10:00', '14:00', '15:00', '16:00', '17:00', '18:00'],\n    4: ['08:00', '09:00', '10:00', '14:00', '15:00', '16:00', '17:00', '18:00'],\n    5: ['08:00', '09:00', '10:00', '14:00', '15:00', '16:00'],\n    6: [],\n    7: [],\n  },\n  antecedenciaMinHoras: 12,         // não agenda com menos que isso de antecedência\n  cancelamentoMinHoras: 24,         // abaixo disso, o robô não cancela: passa para a psicóloga\n  diasAFrente: 14,                  // até quantos dias à frente oferecer horários\n  maxDiasSugeridos: 4,              // quantos dias (com vaga) mostrar por consulta\n  pausaHoras: 24,                   // quanto tempo o robô fica pausado ao chamar a psicóloga\n  evolutionUrl: 'http://evolution:8080',\n  instancia: 'consultorio',         // igual ao EVOLUTION_INSTANCE do .env\n  numeroAvisos: '5511999990000',      // WhatsApp que recebe os avisos (ex.: 5511999998888)\n};\nconst entrada = $input.first().json;\nreturn [{ json: { ...entrada, config } }];"
+      },
+      "id": "c4e1a3bc-5fae-4c5f-b035-5059632dc59e",
+      "name": "Config agenda",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "61d96a04-1d25-4088-ace9-5ea84404915c",
+                    "leftValue": "={{ $json.acao }}",
+                    "rightValue": "horarios",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "horarios"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d87ebcd0-01ef-4fc5-9d39-4fb44dea3f0c",
+                    "leftValue": "={{ $json.acao }}",
+                    "rightValue": "agendar",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "agendar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "7c70325f-189c-40ab-8786-2df886ad7bd2",
+                    "leftValue": "={{ $json.acao }}",
+                    "rightValue": "listar",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "listar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c4d02e46-cb07-4594-9a1c-cc3396faf545",
+                    "leftValue": "={{ $json.acao }}",
+                    "rightValue": "cancelar",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "cancelar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "aca433ba-84fe-4f1a-bd04-39ce8fbf6345",
+                    "leftValue": "={{ $json.acao }}",
+                    "rightValue": "transferir",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "transferir"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "6a018cfb-2d18-449d-ade3-945beda1a66e",
+      "name": "Qual ação?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        448,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { config, data } = $input.first().json;\nconst tz = config.fuso;\nconst hoje = DateTime.now().setZone(tz).startOf('day');\nlet inicio = data ? DateTime.fromISO(String(data).slice(0, 10), { zone: tz }).startOf('day') : hoje;\nif (!inicio.isValid || inicio < hoje) inicio = hoje;\nconst limite = hoje.plus({ days: config.diasAFrente }).endOf('day');\nlet fim = inicio.plus({ days: data ? 3 : config.diasAFrente }).endOf('day');\nif (fim > limite) fim = limite;\nif (inicio > limite) inicio = limite.startOf('day');\nreturn [{ json: { timeMin: inicio.toISO(), timeMax: fim.toISO() } }];"
+      },
+      "id": "1c4ddcaf-f35d-43d4-9a01-6246529e7819",
+      "name": "Período de busca",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config agenda').first().json.config.calendarId }}"
+        },
+        "returnAll": true,
+        "timeMin": "={{ $json.timeMin }}",
+        "timeMax": "={{ $json.timeMax }}",
+        "options": {
+          "orderBy": "startTime"
+        }
+      },
+      "id": "a99855d5-0d83-48d8-b8dc-3b0ae10c4567",
+      "name": "Eventos do período",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        928,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "GoogleAgenda0001",
+          "name": "Google Agenda"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const { config } = $('Config agenda').first().json;\nconst periodo = $('Período de busca').first().json;\nconst tz = config.fuso;\nconst limite = DateTime.now().setZone(tz).plus({ hours: config.antecedenciaMinHoras });\n\nconst ocupados = $input.all().map(i => i.json)\n  .filter(e => e && e.id && e.status !== 'cancelled' && e.transparency !== 'transparent' && e.start)\n  .map(e => e.start.dateTime\n    ? { ini: DateTime.fromISO(e.start.dateTime), fim: DateTime.fromISO(e.end.dateTime) }\n    : { ini: DateTime.fromISO(e.start.date, { zone: tz }), fim: DateTime.fromISO(e.end.date, { zone: tz }) });\n\nconst dias = [];\nlet exemplo = '';\nlet dia = DateTime.fromISO(periodo.timeMin).setZone(tz).startOf('day');\nconst ultimo = DateTime.fromISO(periodo.timeMax).setZone(tz);\nwhile (dia <= ultimo && dias.length < config.maxDiasSugeridos) {\n  const livres = [];\n  for (const h of (config.grade[dia.weekday] || [])) {\n    const [hh, mm] = h.split(':').map(Number);\n    const ini = dia.set({ hour: hh, minute: mm, second: 0, millisecond: 0 });\n    const fim = ini.plus({ minutes: config.duracaoMin });\n    if (ini < limite) continue;\n    if (ocupados.some(o => ini < o.fim && fim > o.ini)) continue;\n    livres.push(h);\n  }\n  if (livres.length) {\n    const d = dia.setLocale('pt-BR');\n    if (!exemplo) exemplo = d.toFormat('yyyy-LL-dd') + 'T' + livres[0];\n    dias.push(`${d.toFormat('cccc, dd/LL')} [data ${d.toFormat('yyyy-LL-dd')}]: ${livres.join(', ')}`);\n  }\n  dia = dia.plus({ days: 1 });\n}\nconst resposta = dias.length\n  ? 'Horários livres (sessões de ' + config.duracaoMin + ' min):\\n' + dias.join('\\n') +\n    '\\n\\nPara agendar use inicio no formato AAAA-MM-DDTHH:mm (ex.: ' + exemplo + ').'\n  : 'Não há horários livres nesse período. Sugira outra data ou ofereça chamar a psicóloga.';\nreturn [{ json: { resposta } }];"
+      },
+      "id": "0dcefb35-943a-4bda-9de6-d0db19fa344a",
+      "name": "Calcular horários livres",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { config, inicio, nome, modalidade, telefone } = $input.first().json;\nconst tz = config.fuso;\nconst ini = DateTime.fromISO(String(inicio || '').slice(0, 16), { zone: tz });\nlet erro = '';\nif (!ini.isValid) {\n  erro = 'Data/hora inválida. Use o formato AAAA-MM-DDTHH:mm.';\n} else if (!(config.grade[ini.weekday] || []).includes(ini.toFormat('HH:mm'))) {\n  erro = 'Esse horário não faz parte da grade de atendimento. Consulte os horários livres primeiro.';\n} else if (ini < DateTime.now().setZone(tz).plus({ hours: config.antecedenciaMinHoras })) {\n  erro = `É preciso agendar com pelo menos ${config.antecedenciaMinHoras}h de antecedência.`;\n} else if (ini > DateTime.now().setZone(tz).plus({ days: config.diasAFrente }).endOf('day')) {\n  erro = `A agenda só está aberta para os próximos ${config.diasAFrente} dias.`;\n}\nif (!erro && (!nome || String(nome).trim().length < 3)) erro = 'Falta o nome completo do paciente.';\nconst fim = ini.isValid ? ini.plus({ minutes: config.duracaoMin }) : null;\nreturn [{ json: {\n  erro,\n  inicioISO: ini.isValid ? ini.toISO() : '',\n  fimISO: fim ? fim.toISO() : '',\n  quandoTexto: ini.isValid ? ini.setLocale('pt-BR').toFormat(\"cccc, dd/LL 'às' HH:mm\") : '',\n  nome: String(nome || '').trim(),\n  modalidade: String(modalidade || 'não informada').trim(),\n  telefone,\n} }];"
+      },
+      "id": "6a42baf5-a186-4c99-9dea-ebed08657ec0",
+      "name": "Validar pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4a647155-9e8a-4666-a258-488405d1097f",
+              "leftValue": "={{ $json.erro }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "d73e9636-53dd-4bc7-91b2-1f04a8585a83",
+      "name": "Pedido válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        928,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config agenda').first().json.config.calendarId }}"
+        },
+        "returnAll": true,
+        "timeMin": "={{ $json.inicioISO }}",
+        "timeMax": "={{ $json.fimISO }}",
+        "options": {}
+      },
+      "id": "f5a968bd-c243-4efc-96cb-7a933574b7b0",
+      "name": "Conflitos no horário",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1152,
+        160
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "GoogleAgenda0001",
+          "name": "Google Agenda"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const conflitos = $input.all().map(i => i.json)\n  .filter(e => e && e.id && e.status !== 'cancelled' && e.transparency !== 'transparent');\nreturn [{ json: { livre: conflitos.length === 0 } }];"
+      },
+      "id": "d3a4972c-bbd7-404e-9d71-49c2ffdf8890",
+      "name": "Checar conflito",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "28763e55-3b7d-488a-a1da-acc05252074c",
+              "leftValue": "={{ $json.livre }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "4e264233-743a-4923-9076-c3f8ba0389b3",
+      "name": "Horário livre?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1584,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config agenda').first().json.config.calendarId }}"
+        },
+        "start": "={{ $('Validar pedido').first().json.inicioISO }}",
+        "end": "={{ $('Validar pedido').first().json.fimISO }}",
+        "additionalFields": {
+          "description": "=Paciente: {{ $('Validar pedido').first().json.nome }}\nWhatsApp: {{ $('Validar pedido').first().json.telefone }}\nModalidade: {{ $('Validar pedido').first().json.modalidade }}\nAgendado pelo assistente virtual em {{ $now.setZone('America/Sao_Paulo').toFormat('dd/LL/yyyy HH:mm') }}",
+          "summary": "=Sessão - {{ $('Validar pedido').first().json.nome }}"
+        }
+      },
+      "id": "7008d9cf-eed9-4be7-8051-b163018fd709",
+      "name": "Criar evento",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1808,
+        144
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "GoogleAgenda0001",
+          "name": "Google Agenda"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6c5a4d2a-6002-4a7b-9e2f-1a5970c9161e",
+              "name": "resposta",
+              "value": "=Sessão agendada com sucesso: {{ $('Validar pedido').first().json.quandoTexto }} ({{ $('Validar pedido').first().json.modalidade }}), em nome de {{ $('Validar pedido').first().json.nome }}.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3e6c4bec-3395-4553-99e3-3c9e90ed067e",
+      "name": "Resposta: agendado",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2032,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "566e7483-cb3c-4f51-a5ee-7292fb5702c9",
+              "name": "resposta",
+              "value": "Esse horário acabou de ser ocupado. Consulte os horários livres novamente e ofereça outra opção.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "28d51da7-d146-4ae1-930d-9fa07ade5ce3",
+      "name": "Resposta: ocupado",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1808,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "61d0c874-242a-49b0-a8db-aa23e22bbff4",
+              "name": "resposta",
+              "value": "={{ $json.erro }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "25e862b4-951e-4f3f-acb2-f80e40c8f718",
+      "name": "Resposta: inválido",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1152,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config agenda').first().json.config.calendarId }}"
+        },
+        "returnAll": true,
+        "timeMin": "={{ $now.toISO() }}",
+        "timeMax": "={{ $now.plus({ days: 60 }).toISO() }}",
+        "options": {
+          "orderBy": "startTime"
+        }
+      },
+      "id": "e4118205-2083-44e6-b54d-186d287849f0",
+      "name": "Próximos eventos",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        704,
+        480
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "GoogleAgenda0001",
+          "name": "Google Agenda"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const { config, telefone } = $('Config agenda').first().json;\nconst tz = config.fuso;\nconst evs = $input.all().map(i => i.json)\n  .filter(e => e && e.id && e.start && e.start.dateTime && telefone && String(e.description || '').includes(telefone));\nif (!evs.length) return [{ json: { resposta: 'Nenhuma sessão futura encontrada para este contato.' } }];\nconst linhas = evs.slice(0, 8).map(e => {\n  const d = DateTime.fromISO(e.start.dateTime).setZone(tz).setLocale('pt-BR');\n  const mod = ((String(e.description).match(/Modalidade:\\s*([^\\n<]+)/i) || [])[1] || '').trim();\n  return `- ${d.toFormat(\"cccc, dd/LL/yyyy 'às' HH:mm\")}${mod ? ' (' + mod + ')' : ''} | ID: ${e.id}`;\n});\nreturn [{ json: { resposta: 'Próximas sessões deste contato:\\n' + linhas.join('\\n') + '\\n\\n(IDs são internos: nunca mostre ao paciente.)' } }];"
+      },
+      "id": "dd457052-1c7e-4ffa-b18a-692468c3169d",
+      "name": "Filtrar sessões do contato",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config agenda').first().json.config.calendarId }}"
+        },
+        "eventId": "={{ $json.eventId }}",
+        "options": {}
+      },
+      "id": "67d0f402-8479-423c-b1fb-b086a1efe869",
+      "name": "Buscar evento",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        704,
+        672
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "GoogleAgenda0001",
+          "name": "Google Agenda"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { config, telefone } = $('Config agenda').first().json;\nconst ev = $input.first().json || {};\nconst tz = config.fuso;\nif (!ev.id || !ev.start || !ev.start.dateTime || ev.status === 'cancelled') {\n  return [{ json: { ok: false, resposta: 'Sessão não encontrada. Use meus_agendamentos para pegar o ID correto.' } }];\n}\nif (!telefone || !String(ev.description || '').includes(telefone)) {\n  return [{ json: { ok: false, resposta: 'Essa sessão não pertence a este contato. Não é possível cancelar.' } }];\n}\nconst ini = DateTime.fromISO(ev.start.dateTime).setZone(tz).setLocale('pt-BR');\nconst horas = ini.diff(DateTime.now(), 'hours').hours;\nif (horas <= 0) return [{ json: { ok: false, resposta: 'Essa sessão já aconteceu.' } }];\nif (horas < config.cancelamentoMinHoras) {\n  return [{ json: { ok: false, resposta: `Faltam menos de ${config.cancelamentoMinHoras}h para a sessão. Pela política do consultório, isso precisa ser tratado diretamente com a psicóloga: use chamar_psicologa.` } }];\n}\nreturn [{ json: { ok: true, eventId: ev.id, quandoTexto: ini.toFormat(\"cccc, dd/LL 'às' HH:mm\") } }];"
+      },
+      "id": "73bc7fc7-d24c-445d-a054-5a2c778f5c43",
+      "name": "Checar cancelamento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e8920179-a79a-43f3-89a7-222d7d682c46",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "d8b10b62-b14a-4a75-8f5d-370f28218674",
+      "name": "Pode cancelar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1152,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config agenda').first().json.config.calendarId }}"
+        },
+        "eventId": "={{ $json.eventId }}",
+        "options": {}
+      },
+      "id": "77c9419d-89e3-47d1-81a1-6e02458c4975",
+      "name": "Excluir evento",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1360,
+        640
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "GoogleAgenda0001",
+          "name": "Google Agenda"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7b776549-407e-4a7d-bd91-a50972cad687",
+              "name": "resposta",
+              "value": "=Sessão de {{ $('Checar cancelamento').first().json.quandoTexto }} cancelada com sucesso.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5b54604b-286e-4718-97e5-8cba46686cd9",
+      "name": "Resposta: cancelado",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1584,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "66853165-3d90-4cd5-8d3d-bb7616f4cdb6",
+              "name": "resposta",
+              "value": "={{ $json.resposta }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b8f055ff-50e2-4925-aa96-a77d99147341",
+      "name": "Resposta: não cancelado",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1360,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_pausa (telefone, ate, motivo) VALUES ($1, now() + make_interval(hours => $3::int), $2) ON CONFLICT (telefone) DO UPDATE SET ate = EXCLUDED.ate, motivo = EXCLUDED.motivo;",
+        "options": {
+          "queryReplacement": "={{ [ $json.telefone, $json.motivo || 'não informado', $json.config.pausaHoras ] }}"
+        }
+      },
+      "id": "66fd0032-c8c8-46dd-989a-d5a0e0b83503",
+      "name": "Pausar robô p/ contato",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        704,
+        960
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "PgAutomacao00001",
+          "name": "Postgres Automação"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const { config, telefone, nome, motivo } = $('Config agenda').first().json;\nconst urgente = /urgente|risco|crise|suic/i.test(String(motivo || ''));\nconst texto = [\n  urgente ? '🚨 *URGENTE — assistente virtual*' : '🔔 *Assistente virtual — atendimento humano solicitado*',\n  '',\n  `Contato: https://wa.me/${telefone}`,\n  `Nome no WhatsApp: ${nome || '-'}`,\n  `Motivo: ${motivo || '-'}`,\n  '',\n  `O robô ficou pausado ${config.pausaHoras}h para este contato.`,\n  `Para reativar antes, envie aqui: #voltar ${telefone}`,\n].join('\\n');\nreturn [{ json: { numero: config.numeroAvisos, texto } }];"
+      },
+      "id": "a6a3027e-df15-466a-b202-835bde2a7db6",
+      "name": "Montar aviso",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config agenda').first().json.config.evolutionUrl }}/message/sendText/{{ $('Config agenda').first().json.config.instancia }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.numero, text: $json.texto }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "2c42a31b-b352-4e7b-8b84-8e6b540b5f8c",
+      "name": "Avisar psicóloga",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1152,
+        960
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "EvolutionApi0001",
+          "name": "Evolution API"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b4810ae6-3d24-45a8-be52-8b61627c7085",
+              "name": "resposta",
+              "value": "A psicóloga foi avisada e vai responder pessoalmente assim que possível. O assistente automático ficou pausado para este contato. Informe isso à pessoa de forma acolhedora.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6dbaa0d5-cc8d-4bf7-a1be-a63c3f8c1f00",
+      "name": "Resposta: transferido",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1360,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ecd1a11a-29e7-4666-97e6-70fa5c8d8e3b",
+              "name": "resposta",
+              "value": "Ação desconhecida.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fe58e745-aac2-4558-94d9-f55d0e548efe",
+      "name": "Resposta: ação inválida",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        704,
+        1152
+      ]
+    }
+  ],
+  "connections": {
+    "Quando chamado pelo agente": {
+      "main": [
+        [
+          {
+            "node": "Config agenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config agenda": {
+      "main": [
+        [
+          {
+            "node": "Qual ação?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qual ação?": {
+      "main": [
+        [
+          {
+            "node": "Período de busca",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Próximos eventos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Buscar evento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pausar robô p/ contato",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resposta: ação inválida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Período de busca": {
+      "main": [
+        [
+          {
+            "node": "Eventos do período",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eventos do período": {
+      "main": [
+        [
+          {
+            "node": "Calcular horários livres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar pedido": {
+      "main": [
+        [
+          {
+            "node": "Pedido válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedido válido?": {
+      "main": [
+        [
+          {
+            "node": "Conflitos no horário",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resposta: inválido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conflitos no horário": {
+      "main": [
+        [
+          {
+            "node": "Checar conflito",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Checar conflito": {
+      "main": [
+        [
+          {
+            "node": "Horário livre?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Horário livre?": {
+      "main": [
+        [
+          {
+            "node": "Criar evento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resposta: ocupado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar evento": {
+      "main": [
+        [
+          {
+            "node": "Resposta: agendado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Próximos eventos": {
+      "main": [
+        [
+          {
+            "node": "Filtrar sessões do contato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar evento": {
+      "main": [
+        [
+          {
+            "node": "Checar cancelamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Checar cancelamento": {
+      "main": [
+        [
+          {
+            "node": "Pode cancelar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pode cancelar?": {
+      "main": [
+        [
+          {
+            "node": "Excluir evento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resposta: não cancelado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Excluir evento": {
+      "main": [
+        [
+          {
+            "node": "Resposta: cancelado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pausar robô p/ contato": {
+      "main": [
+        [
+          {
+            "node": "Montar aviso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar aviso": {
+      "main": [
+        [
+          {
+            "node": "Avisar psicóloga",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Avisar psicóloga": {
+      "main": [
+        [
+          {
+            "node": "Resposta: transferido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "PsiAlertasErro04"
+  },
+  "nodeGroups": [],
+  "id": "PsiFerramentas01",
+  "tags": [],
+  "pinData": {}
+}
